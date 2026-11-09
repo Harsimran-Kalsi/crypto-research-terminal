@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "quant-observatory"
+version = "0.1.0"
+description = "Live market microstructure research cockpit"
+requires-python = ">=3.9"
+dependencies = ["rich==13.9.4", "websockets==13.1", "numpy==1.26.4"]
+
+[project.optional-dependencies]
+research = ["numpy==1.26.4", "catboost==1.2.8"]
+
+[project.scripts]
+quant = "quant.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
