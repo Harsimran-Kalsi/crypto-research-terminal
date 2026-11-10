@@ -7,7 +7,7 @@ name = "quant-observatory"
 version = "0.1.0"
 description = "Live market microstructure research cockpit"
 requires-python = ">=3.9"
-dependencies = ["rich==13.9.4", "websockets==13.1", "numpy==1.26.4"]
+dependencies = ["rich==15.0.0", "websockets==13.1", "numpy==1.26.4", "textual==8.2.8"]
 
 [project.optional-dependencies]
 research = ["numpy==1.26.4", "catboost==1.2.8"]
