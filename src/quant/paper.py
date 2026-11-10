@@ -16,16 +16,21 @@ CREATE TABLE IF NOT EXISTS paper_fills (
  net_pnl REAL, reason TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS paper_control (
  id INTEGER PRIMARY KEY CHECK(id=1), paused INTEGER NOT NULL, original_config TEXT);
+CREATE TABLE IF NOT EXISTS paper_equity (
+ quote_id INTEGER PRIMARY KEY, at REAL NOT NULL, equity REAL NOT NULL,
+ realized REAL NOT NULL, fees REAL NOT NULL);
 '''
 
 
-def initialize(db, symbol='BTC/USD', demo=False, fee_bps=40., delay=.5):
+def initialize(db, symbol='BTC/USD', demo=False, fee_bps=40., delay=.5, hold=60., strategy=None):
     if not (math.isfinite(fee_bps) and 0 <= fee_bps <= 1000
             and math.isfinite(delay) and 0 <= delay <= 60):
         raise ValueError('Fee must be 0..1000 bps and delay 0..60 seconds')
     db.executescript(SCHEMA)
     config = dict(symbol=symbol, demo=demo, fee_bps=fee_bps, delay=delay,
-                  initial=100., notional=10., hold=60., threshold=.4, loss_limit=3.)
+                  initial=100., notional=10., hold=hold, threshold=.4, loss_limit=3.)
+    if strategy is not None:
+        config['strategy'] = strategy
     encoded = json.dumps(config, sort_keys=True)
     with db:
         db.execute('INSERT OR IGNORE INTO paper_control VALUES(1,0,NULL)')
@@ -46,7 +51,7 @@ def account(db):
     return dict(zip([d[0] for d in cur.description], row)) if row else None
 
 
-def step(db, now=None):
+def step(db, now=None, entry_signal=None):
     now = time.time() if now is None else now
     # Serialize workers: state transition and fill are committed atomically.
     db.execute('BEGIN IMMEDIATE')
@@ -69,7 +74,8 @@ def step(db, now=None):
                 if a['pending'] == 'BUY':
                     a['pending'], a['due'] = None, None
             else:
-                status = 'HOLDING' if a['qty'] else ('PAUSED: BASELINE RETIRED' if paused else ('LOSS LIMIT: ENTRIES HALTED' if halted else 'WAIT: IMBALANCE < +0.40'))
+                waiting = 'WAIT: MODEL SIGNAL BELOW THRESHOLD' if entry_signal is not None else 'WAIT: IMBALANCE < +0.40'
+                status = 'HOLDING' if a['qty'] else ('PAUSED: BASELINE RETIRED' if paused else ('LOSS LIMIT: ENTRIES HALTED' if halted else waiting))
                 if (halted or paused) and a['pending'] == 'BUY':
                     a['pending'], a['due'] = None, None
                 if a['pending'] and now >= a['due'] and qid > a['signal_id'] and ts >= a['due']:
@@ -83,7 +89,7 @@ def step(db, now=None):
                             a['qty'], a['cost'], a['entered'] = qty, notional+fee, ts
                             a['fees'] += fee
                             db.execute('INSERT INTO paper_fills(quote_id,at,side,price,qty,fee,reason) VALUES(?,?,?,?,?,?,?)',
-                                       (qid, ts, side, ask, qty, fee, 'imbalance baseline'))
+                                       (qid, ts, side, ask, qty, fee, 'frozen model diagnostic' if entry_signal is not None else 'imbalance baseline'))
                             status = 'PAPER BUY FILLED'
                         else:
                             status = 'BUY CANCELLED: INSUFFICIENT DISPLAYED SIZE'
@@ -108,12 +114,15 @@ def step(db, now=None):
                     if a['qty'] and (ts-a['entered'] >= c['hold'] or halted):
                         a['pending'], a['due'], a['signal_id'] = 'SELL', now+c['delay'], qid
                         status = 'EXIT PENDING'
-                    elif not a['qty'] and not halted and not paused and (bq-aq)/(bq+aq) >= c['threshold']:
+                    elif not a['qty'] and not halted and not paused and (bool(entry_signal) if entry_signal is not None else (bq-aq)/(bq+aq) >= c['threshold']):
                         a['pending'], a['due'], a['signal_id'] = 'BUY', now+c['delay'], qid
                         status = 'ENTRY PENDING'
                 if a['pending'] and status.startswith(('WAIT:', 'HOLDING')):
                     status = a['pending'] + ' PENDING: WAITING FOR POST-DELAY QUOTE'
             a['last_id'] = max(a['last_id'], qid)
+            if fresh:
+                db.execute('INSERT OR IGNORE INTO paper_equity VALUES(?,?,?,?,?)',
+                           (qid,ts,a['cash']+a['qty']*bid*(1-fee_rate),a['realized'],a['fees']))
         a['status'], a['heartbeat'] = status, now
         fields = ['cash','qty','cost','entered','realized','fees','pending','due','signal_id','last_id','status','heartbeat']
         db.execute('UPDATE paper_account SET '+','.join(k+'=?' for k in fields)+' WHERE id=1', [a[k] for k in fields])
