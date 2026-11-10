@@ -2,6 +2,7 @@
 import math
 from rich.text import Text
 from textual.widgets import Static
+from textual.color import Color
 from .ui_theme import palette
 
 class Orbit(Static):
@@ -51,16 +52,25 @@ class Orbit(Static):
                 qx,qy=px+dx,py+dy
                 if 0<=qx<pw and 0<=qy<ph:
                     pixels[(qx,qy)]=max(z,pixels.get((qx,qy),-10))
+        # Keep one glyph family: switching to full blocks exaggerates density
+        # and makes rotating surfaces pop. Shade continuously by camera depth.
+        accent=Color.parse(colors['accent'])
+        background=Color.parse(self.app.get_css_variables()['background'])
+        far=accent.blend(background,.62)
+        near=accent.blend(Color.parse(colors['fg']),.12)
+        shades=[far.blend(near,i/23).hex for i in range(24)]
         dots=((1,8),(2,16),(4,32),(64,128));out=Text()
         for r in range(h):
             for c in range(w):
-                bits=0;depth=-10
+                bits=0;depths=[]
                 for dy in range(4):
                     for dx in range(2):
                         key=(c*2+dx,r*4+dy)
-                        if key in pixels:bits|=dots[dy][dx];depth=max(depth,pixels[key])
-                density=bin(bits).count('1')
-                glyph=('█' if density==8 else '▓') if density>=6 and depth>0 else chr(0x2800+bits) if bits else ' '
-                out.append(glyph,style=colors['accent'] if depth>0 else colors['muted'])
+                        if key in pixels:
+                            bits|=dots[dy][dx];depths.append(pixels[key])
+                depth=sum(depths)/len(depths) if depths else 0
+                light=max(0.,min(1.,(depth+3.5)/7))
+                light=light*light*(3-2*light)
+                out.append(chr(0x2800+bits) if bits else ' ',style=shades[round(light*23)])
             out.append('\n')
         return out

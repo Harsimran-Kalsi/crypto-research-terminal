@@ -202,4 +202,5 @@ click the artwork to advance. The selected option is saved with the theme in
 local display preferences. `A` still pauses/resumes motion.
 
 The animation uses the original larger panel size, with thicker Braille strokes
-and shaded `▓`/`█` characters on dense foreground surfaces.
+and a continuous depth-based color gradient. It avoids switching between dots
+and solid blocks, which can create patchy surfaces during rotation.
