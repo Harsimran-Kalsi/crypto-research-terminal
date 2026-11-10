@@ -3,9 +3,34 @@
 A terminal workspace for testing short-term crypto price forecasts against live
 market data, simple baselines, and execution costs.
 
-The current focus is **research in shadow mode**: a frozen, fitted micro-price
-estimator records predictions while later prices arrive. It places no exchange
-orders. The earlier paper-trading baseline is paused; its history is retained.
+The project combines **live shadow research** with a separate **diagnostic paper
+account**. A frozen, fitted micro-price estimator records predictions while later
+prices arrive; the simulated account measures execution costs. It places no
+exchange orders. The earlier imbalance baseline is paused and retained as history.
+
+## Preview
+
+![Trading dashboard with simulated account, price and equity charts, and recent fills](docs/images/trading.png)
+
+Rendered captures of the actual application, using local recorded market data.
+All trades and balances are simulated. The displayed losses and research scores
+are diagnostics, not evidence of a profitable strategy. Colors follow the selected
+theme.
+
+<details>
+<summary>Research view and animation</summary>
+
+![Research tab comparing fitted micro-price estimates with midpoint baselines](docs/images/research.png)
+
+The research tab tracks prospective forecast errors independently of the paper
+account. An estimate can abstain when the current state is unsupported.
+
+![Animated terminal sculpture](docs/images/ambient-motion.gif)
+
+Optional ambient animation. It is purely decorative and can be paused with `A`;
+its motion does not represent prediction confidence or trading performance.
+
+</details>
 
 ## What it does
 
