@@ -129,3 +129,77 @@ is no automatic retention limit; monitor disk usage. Receipt time is a local
 clock measurement, not exchange or execution latency. Simulation does not model
 market impact or actual exchange acknowledgements. No statistical significance,
 profitability, or production-readiness claim is made.
+
+## Model-driven paper trading and charts
+
+A separate diagnostic account can run alongside shadow research:
+
+```sh
+.venv/bin/quant model-paper
+.venv/bin/quant watch
+```
+
+Run the worker and viewer separately, with `collect` and `shadow` also running.
+The default viewer now shows simulated positions, a price chart with buy/sell
+markers, an equity chart after costs, and recent fills. Charts use a three-minute
+time axis and do not interpolate across missing buckets. Full research view:
+
+```sh
+.venv/bin/quant watch --view research
+```
+
+The account is `data/model-paper.sqlite3`; research remains in `data/live.sqlite3`.
+The worker reads the latest source quote and the frozen model without writing
+research forecasts or scores. It records no retrospective trades.
+
+This is an **unvalidated execution diagnostic**, not a profitable strategy claim.
+It buys when the fitted estimate is above the current ask, uses a $100 simulated balance, up to $10 entry notional, a 15-second hold,
+0.5-second delay and 40-bps hypothetical fees per side. It is deliberately not
+cost-gated: weak signals may produce trades that predictably lose after fees.
+The UI displays signal size next to assumed round-trip fees. These are explicit
+experimental choices, not optimal settings from the paper. No leverage is used.
+
+Displayed quantity must cover the whole fill. The existing account-level loss
+limit blocks new entries after a $3 loss and manages an open exit. It cannot
+guarantee maximum loss. Pending positions/fills and configuration survive
+restarts; stopping the worker pauses management. Different model IDs or settings
+require a different account database. `--demo` uses separate demo source/account
+files; pass the matching `--account-db` to the viewer.
+
+## Interactive terminal redesign
+
+`quant watch` now opens the Textual cockpit: a dark, responsive layout with a
+large price plot, equity plot, execution state, scrollable fills, and tabs.
+The interface opens the databases read-only and never starts/stops workers or
+changes strategy/account settings.
+
+| Key | Action |
+|---|---|
+| `1`, `2`, `3` | Trading, Research, Logs |
+| Left / Right | 3-, 15-, or 30-minute chart window |
+| `A` | Toggle the rotating ambient trefoil |
+| `Q` | Close the viewer only |
+
+The trefoil is a small 3D parametric knot rendered with Braille characters. It
+is purely decorative; rotation, shading and speed do not represent performance,
+prediction confidence, or connection status. Disable it with `--no-animation`.
+Braille chart strokes provide sub-character resolution. Actual appearance
+varies with terminal/font support. Time gaps over five seconds are not connected.
+
+Use `quant watch --classic` for the original Rich viewer. `--once` still prints
+a static classic frame for inspection. Changes to the interface require
+restarting the viewer; trading and research workers continue separately.
+
+Themes follow the selected Textual theme rather than fixed dark colors. Press
+Ctrl+P, search for `theme`, and select a theme. The selection is saved locally
+beside the market database in `ui-preferences.json` and restored next time.
+Charts, animation and status colors follow that selection too. This does not
+change the terminal application's global profile or trading configuration.
+
+The animation panel has three purely decorative options: Trefoil,
+Orbitals, and Wave lattice. Click its `◀` / `▶` buttons to cycle, or left/right
+click the artwork to advance. The selected option is saved with the theme in
+local display preferences. `A` still pauses/resumes motion.
+
+The animation uses the original larger panel size, with thicker Braille strokes
+and shaded `▓`/`█` characters on dense foreground surfaces.

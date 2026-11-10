@@ -11,3 +11,6 @@ data/
 build/
 dist/
 .pytest_cache/
+
+# Local mockups and captured terminal previews
+/output/
