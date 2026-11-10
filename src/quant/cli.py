@@ -115,7 +115,7 @@ def spark(values, width=74):
     return ''.join('▁▂▃▄▅▆▇█'[min(7, int((v-low)/(high-low or 1)*7))] for v in values)
 
 
-def screen(db, symbol):
+def screen(db, symbol, account_db='data/model-paper.sqlite3', view='trading'):
     from .paper import panel
     from .microprice import panel as shadow_panel
     from rich.console import Group
@@ -143,6 +143,16 @@ def screen(db, symbol):
         m = json.loads(payload)
         detail = m.get('error') or ('%s record(s)' % len(m['data']) if 'data' in m else payload[:95])
         tape.add_row(datetime.fromtimestamp(received, timezone.utc).strftime('%H:%M:%S'), channel, str(detail))
+    if view == 'trading':
+        from .model_paper import panels
+        return Group(
+            Panel(Text('CRYPTO RESEARCH TERMINAL  ·  %s  ·  %s  ·  %s' %
+                       (symbol,'SYNTHETIC DEMO' if demo else 'LIVE DATA',status),style=color),
+                  subtitle='PAPER ONLY · NO REAL ORDERS · Ctrl+C closes viewer'),
+            Panel(metrics,title='MARKET',border_style='cyan'),
+            panels(account_db,symbol,demo),
+            Panel('Research recording and shadow scoring run separately. Full research view: quant watch --view research',
+                  title='RESEARCH CONTINUES',border_style='dim'))
     return Group(
         Panel(Text('QUANT / OBSERVATORY     %s     %s     %s' %
                    (symbol, 'SYNTHETIC DEMO' if demo else 'LIVE MARKET DATA', status), style=color),
@@ -160,11 +170,11 @@ def watch(args):
     try:
         if args.once:
             from rich.console import Console
-            Console().print(screen(db, args.symbol))
+            Console().print(screen(db, args.symbol, args.account_db, args.view))
         else:
-            with Live(screen(db, args.symbol), refresh_per_second=4, screen=True) as live:
+            with Live(screen(db, args.symbol, args.account_db, args.view), refresh_per_second=4, screen=True) as live:
                 while True:
-                    live.update(screen(db, args.symbol))
+                    live.update(screen(db, args.symbol, args.account_db, args.view))
                     time.sleep(.25)
     finally:
         db.close()
@@ -224,6 +234,14 @@ def main():
     shadow.add_argument('--symbol', default='BTC/USD')
     shadow.add_argument('--demo', action='store_true')
     shadow.add_argument('--seconds', type=float, default=0)
+    model_paper = sub.add_parser('model-paper', help='Paper trade a frozen model in a separate account')
+    model_paper.add_argument('--db', default='data/live.sqlite3')
+    model_paper.add_argument('--account-db', default='data/model-paper.sqlite3')
+    model_paper.add_argument('--symbol', default='BTC/USD')
+    model_paper.add_argument('--demo', action='store_true')
+    model_paper.add_argument('--seconds', type=float, default=0)
+    model_paper.add_argument('--fee-bps', type=float, default=40.)
+    model_paper.add_argument('--delay', type=float, default=.5)
     for name in ('collect', 'watch', 'evaluate', 'paper'):
         p = sub.add_parser(name)
         p.add_argument('--db', default='data/live.sqlite3')
@@ -234,6 +252,8 @@ def main():
             p.add_argument('--seconds', type=float, default=0, help='0 runs until interrupted')
         if name == 'watch':
             p.add_argument('--once', action='store_true')
+            p.add_argument('--account-db', default='data/model-paper.sqlite3')
+            p.add_argument('--view', choices=('trading','research'), default='trading')
         if name == 'paper':
             p.add_argument('--fee-bps', type=float, default=40., help='Hypothetical fee per side, not an exchange quote')
             p.add_argument('--delay', type=float, default=.5, help='Simulated execution delay in seconds')
@@ -241,8 +261,15 @@ def main():
     args = parser.parse_args()
     if getattr(args, 'demo', False) and args.db == 'data/live.sqlite3':
         args.db = 'data/demo.sqlite3'
+        if getattr(args,'account_db',None) == 'data/model-paper.sqlite3':
+            args.account_db = 'data/model-paper-demo.sqlite3'
     try:
-        if args.command == 'microprice-reference':
+        if args.command == 'model-paper':
+            from .model_paper import run
+            if not math.isfinite(args.seconds) or args.seconds < 0:
+                parser.error('--seconds must be finite and nonnegative')
+            run(args)
+        elif args.command == 'microprice-reference':
             from .microprice import reference
             reference(args)
         elif args.command == 'shadow':
