@@ -165,6 +165,11 @@ def screen(db, symbol, account_db='data/model-paper.sqlite3', view='trading'):
 
 
 def watch(args):
+    if not args.once and not args.classic:
+        from .tui import TerminalApp
+        TerminalApp(args.db,args.account_db,args.symbol,initial=args.view,
+                    animation=not args.no_animation).run()
+        return
     from rich.live import Live
     db = connect(args.db)
     try:
@@ -254,6 +259,8 @@ def main():
             p.add_argument('--once', action='store_true')
             p.add_argument('--account-db', default='data/model-paper.sqlite3')
             p.add_argument('--view', choices=('trading','research'), default='trading')
+            p.add_argument('--classic', action='store_true', help='Use the original Rich viewer')
+            p.add_argument('--no-animation', action='store_true', help='Disable decorative motion')
         if name == 'paper':
             p.add_argument('--fee-bps', type=float, default=40., help='Hypothetical fee per side, not an exchange quote')
             p.add_argument('--delay', type=float, default=.5, help='Simulated execution delay in seconds')
